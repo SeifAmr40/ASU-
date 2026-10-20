@@ -1,0 +1,2092 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- iPhone Full-Screen Native Web App Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="EngTracker" />
+  <meta name="theme-color" content="#0d1117" />
+  <title>asu-eng / lecture-tracker — Notion × GitHub</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            gh: {
+              bg: '#0d1117',
+              canvas: '#161b22',
+              elevated: '#1f242c',
+              border: '#30363d',
+              muted: '#8b949e',
+              text: '#e6edf3',
+              green0: '#161b22',
+              green1: '#0e4429',
+              green2: '#006d32',
+              green3: '#26a641',
+              green4: '#39d353',
+              accent: '#2f81f7',
+              danger: '#f85149',
+              warning: '#d29922'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #0d1117;
+      color: #e6edf3;
+      font-family: 'Inter', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0d1117;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #484f58;
+    }
+    .notion-callout {
+      background: rgba(56, 139, 253, 0.08);
+      border: 1px solid rgba(56, 139, 253, 0.25);
+    }
+    .urgent-glow {
+      box-shadow: 0 0 0 1px rgba(248, 81, 73, 0.4), 0 4px 20px -4px rgba(248, 81, 73, 0.2);
+    }
+    .cell-hover:hover {
+      transform: scale(1.18);
+      z-index: 10;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-blue-500/30 selection:text-blue-200">
+
+  <!-- Custom Non-Blocking Toast Notification -->
+  <div id="toastBanner" class="fixed bottom-5 right-5 z-50 hidden items-center gap-2.5 px-4 py-3 rounded-xl bg-gh-elevated border border-gh-border text-xs font-mono text-gh-text shadow-2xl transition-all duration-300">
+    <span id="toastIcon" class="text-gh-green4 text-sm">✓</span>
+    <span id="toastMessage">Saved successfully</span>
+  </div>
+
+  <!-- Top GitHub-style Header Bar -->
+  <header class="sticky top-0 z-30 bg-[#010409]/95 backdrop-blur border-b border-gh-border px-4 lg:px-8 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <!-- Repo Breadcrumb -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-gh-canvas border border-gh-border flex items-center justify-center text-sm font-mono font-semibold text-gh-green4 shadow-inner">
+          &lt;/&gt;
+        </div>
+        <div class="flex items-center gap-1.5 text-sm">
+          <span class="text-gh-muted font-medium hidden sm:inline">asu-engineering</span>
+          <span class="text-gh-muted hidden sm:inline">/</span>
+          <span class="font-semibold text-gh-text tracking-tight">lecture-tracker</span>
+          <span class="ml-1 px-2 py-0.5 text-[11px] font-mono rounded-full bg-gh-canvas border border-gh-border text-gh-green4">iOS Ready</span>
+        </div>
+      </div>
+
+      <!-- Live Clock, Semester Calibration & Direct HTML Download Button -->
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <!-- Live Date & College Week Pill -->
+        <div class="flex items-center gap-2 bg-gh-canvas border border-gh-border rounded-lg px-2.5 py-1.5">
+          <span class="w-2 h-2 rounded-full bg-gh-green4 animate-pulse"></span>
+          <span id="liveDateDisplay" class="font-mono text-gh-text"></span>
+          <span class="text-gh-border">|</span>
+          <span id="liveWeekBadge" class="font-mono font-semibold text-gh-green4">Week 2</span>
+        </div>
+
+        <!-- Week 1 Start Date Calibration -->
+        <div class="flex items-center gap-1.5 bg-gh-canvas border border-gh-border rounded-lg px-2.5 py-1" title="Week 1 Start Date (Adjust if your college week number differs)">
+          <span class="text-gh-muted font-mono text-[11px]">W1 Start:</span>
+          <input id="semesterStartInput" type="date" class="bg-transparent text-gh-text font-mono text-xs focus:outline-none cursor-pointer" />
+        </div>
+
+        <!-- JSON Backup Export / Import -->
+        <button onclick="exportData()" class="px-2.5 py-1.5 rounded-lg bg-gh-canvas hover:bg-gh-elevated border border-gh-border text-gh-muted hover:text-gh-text font-mono transition flex items-center gap-1" title="Export Backup JSON">
+          <span>↓ JSON</span>
+        </button>
+        <label class="px-2.5 py-1.5 rounded-lg bg-gh-canvas hover:bg-gh-elevated border border-gh-border text-gh-muted hover:text-gh-text font-mono transition flex items-center gap-1 cursor-pointer" title="Import Backup JSON">
+          <span>↑ Import</span>
+          <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="importData(event)" />
+        </label>
+
+        <!-- Prominent Direct Download index.html Button -->
+        <button onclick="downloadHtmlFile()" class="px-3 py-1.5 rounded-lg bg-[#238636] hover:bg-[#2ea043] border border-gh-green3 text-white font-mono font-semibold transition flex items-center gap-1.5 shadow-sm">
+          <span>⬇ Download index.html</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 space-y-6">
+
+    <!-- Notion Page Header + Quick Stats -->
+    <section class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 border-b border-gh-border pb-6">
+      <div class="space-y-2">
+        <div class="flex flex-wrap items-center gap-2 text-xs font-mono text-gh-muted">
+          <span class="px-2 py-0.5 rounded-md bg-gh-canvas border border-gh-border text-blue-400">main</span>
+          <span>•</span>
+          <span id="totalCommitsCounter">0 lectures committed</span>
+          <span>•</span>
+          <span id="weekParityBadge" class="text-purple-400">Even Week</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-3">
+          <span>📚 Engineering Lecture & Exam Hub</span>
+        </h1>
+        <p class="text-sm text-gh-muted max-w-2xl">
+          Synced with your Ain Shams Engineering schedule, college week counter, and upcoming quiz/midterm countdowns.
+        </p>
+      </div>
+
+      <!-- Quick Stats Pill Row -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full lg:w-auto">
+        <div class="bg-gh-canvas border border-gh-border rounded-xl px-3.5 py-2.5">
+          <div class="text-[11px] font-mono text-gh-muted uppercase">Current Week</div>
+          <div id="statCurrentWeekProgress" class="text-lg font-mono font-bold text-gh-text mt-0.5">0 / 0</div>
+          <div id="statCurrentWeekPct" class="text-[11px] text-gh-green4 font-mono">0% studied</div>
+        </div>
+        <div class="bg-gh-canvas border border-gh-border rounded-xl px-3.5 py-2.5">
+          <div class="text-[11px] font-mono text-gh-muted uppercase">Semester Studied</div>
+          <div id="statTotalStudied" class="text-lg font-mono font-bold text-gh-green4 mt-0.5">0</div>
+          <div id="statTotalElapsed" class="text-[11px] text-gh-muted font-mono">of 0 elapsed</div>
+        </div>
+        <div class="bg-gh-canvas border border-gh-border rounded-xl px-3.5 py-2.5">
+          <div class="text-[11px] font-mono text-gh-muted uppercase">Backlog</div>
+          <div id="statBacklogCount" class="text-lg font-mono font-bold text-amber-400 mt-0.5">0</div>
+          <div class="text-[11px] text-gh-muted font-mono">unstudied sessions</div>
+        </div>
+        <div class="bg-gh-canvas border border-gh-border rounded-xl px-3.5 py-2.5">
+          <div class="text-[11px] font-mono text-gh-muted uppercase">Next Quiz In</div>
+          <div id="statNextExamCountdown" class="text-lg font-mono font-bold text-rose-400 mt-0.5">--</div>
+          <div id="statNextExamName" class="text-[11px] text-gh-muted font-mono truncate">No upcoming exams</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- QUIZ & MIDTERM COUNTDOWN HUB -->
+    <section class="bg-gh-canvas border border-gh-border rounded-xl p-4 sm:p-5 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-base">⏳</span>
+          <div>
+            <h2 class="text-xs font-mono uppercase tracking-wider text-gh-text font-semibold flex items-center gap-2">
+              <span>Quiz & Midterm Countdown Radar</span>
+              <span id="activeExamsCountBadge" class="px-2 py-0.5 text-[10px] rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">0 Upcoming</span>
+            </h2>
+            <p class="text-[11px] text-gh-muted">
+              Live countdown + automatic study readiness based on your completed lectures for each course.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="toggleShowCompletedExams()" id="toggleCompletedExamsBtn" class="px-2.5 py-1.5 rounded-lg bg-gh-bg hover:bg-gh-elevated border border-gh-border text-[11px] font-mono text-gh-muted hover:text-gh-text transition">
+            Show Completed (0)
+          </button>
+          <button onclick="openExamModal()" class="px-3 py-1.5 rounded-lg bg-[#238636] hover:bg-[#2ea043] text-xs font-mono font-semibold text-white transition flex items-center gap-1.5">
+            <span>+ Add Quiz / Midterm</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Countdown Cards Grid -->
+      <div id="examCountdownGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5"></div>
+    </section>
+
+    <!-- GitHub-Style Semester Contribution Matrix -->
+    <section class="bg-gh-canvas border border-gh-border rounded-xl p-4 sm:p-5 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <h2 class="text-xs font-mono uppercase tracking-wider text-gh-muted font-semibold">
+            Semester Study Activity Graph (Weeks 1 – 14)
+          </h2>
+          <span class="text-[11px] font-mono px-2 py-0.5 rounded-md bg-gh-bg border border-gh-border text-gh-muted">
+            Click any square to jump to that week
+          </span>
+        </div>
+        <!-- Legend -->
+        <div class="flex items-center gap-1.5 text-[11px] font-mono text-gh-muted">
+          <span>Unstudied</span>
+          <span class="w-3 h-3 rounded-sm bg-[#0d1117] border border-gh-border inline-block" title="Not Started"></span>
+          <span class="w-3 h-3 rounded-sm bg-[#0e4429] inline-block" title="Attended"></span>
+          <span class="w-3 h-3 rounded-sm bg-[#006d32] inline-block" title="In Progress"></span>
+          <span class="w-3 h-3 rounded-sm bg-[#26a641] inline-block" title="Studied"></span>
+          <span class="w-3 h-3 rounded-sm bg-[#39d353] inline-block" title="Studied + Sheet Solved"></span>
+          <span>Mastered</span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto pb-1">
+        <div id="heatmapContainer" class="min-w-[720px] space-y-1.5"></div>
+      </div>
+    </section>
+
+    <!-- Today's Live Radar Banner -->
+    <section id="todayBanner" class="notion-callout rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-mono uppercase px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-semibold" id="todayDayLabel">TODAY</span>
+          <h3 class="text-sm font-semibold text-gh-text" id="todayHeadline">Checking today's calendar...</h3>
+        </div>
+        <p class="text-xs text-gh-muted" id="todaySubtext"></p>
+      </div>
+      <div id="todayQuickPills" class="flex flex-wrap items-center gap-2"></div>
+    </section>
+
+    <!-- Notion Database Navigation & Filter Bar -->
+    <section class="space-y-4">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-gh-border pb-3">
+        <!-- View Switcher Tabs -->
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button onclick="switchView('week')" id="tab-week" class="view-tab px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 bg-gh-elevated text-gh-text border border-gh-border">
+            <span>📅</span> <span>Weekly Schedule View</span>
+          </button>
+          <button onclick="switchView('courses')" id="tab-courses" class="view-tab px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 text-gh-muted hover:text-gh-text border border-transparent">
+            <span>🗂️</span> <span>By Course Syllabus</span>
+          </button>
+          <button onclick="switchView('kanban')" id="tab-kanban" class="view-tab px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 text-gh-muted hover:text-gh-text border border-transparent">
+            <span>📋</span> <span>Kanban Board</span>
+          </button>
+          <button onclick="switchView('backlog')" id="tab-backlog" class="view-tab px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 text-gh-muted hover:text-gh-text border border-transparent">
+            <span>⚠️</span> <span>Backlog & Review</span>
+            <span id="backlogTabBadge" class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-300">0</span>
+          </button>
+        </div>
+
+        <!-- Week Navigator + Filters -->
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="flex items-center bg-gh-canvas border border-gh-border rounded-lg overflow-hidden">
+            <button onclick="changeSelectedWeek(-1)" class="px-2.5 py-1 text-xs font-mono hover:bg-gh-elevated text-gh-muted hover:text-gh-text transition">◀</button>
+            <select id="weekSelectDropdown" onchange="selectWeek(parseInt(this.value))" class="bg-gh-canvas text-gh-text text-xs font-mono px-2 py-1 focus:outline-none cursor-pointer border-x border-gh-border"></select>
+            <button onclick="changeSelectedWeek(1)" class="px-2.5 py-1 text-xs font-mono hover:bg-gh-elevated text-gh-muted hover:text-gh-text transition">▶</button>
+          </div>
+
+          <button onclick="jumpToCurrentWeek()" class="px-2.5 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-mono transition">
+            Jump to Current Week
+          </button>
+
+          <select id="typeFilter" onchange="renderActiveView()" class="bg-gh-canvas border border-gh-border rounded-lg text-xs font-mono text-gh-text px-2.5 py-1 focus:outline-none">
+            <option value="ALL">All Sessions (Lec + Tut + Lab)</option>
+            <option value="Lecture">Lectures Only</option>
+            <option value="Tutorial">Tutorials / Sections Only</option>
+            <option value="Lab">Labs / Studios Only</option>
+          </select>
+
+          <select id="courseFilter" onchange="renderActiveView()" class="bg-gh-canvas border border-gh-border rounded-lg text-xs font-mono text-gh-text px-2.5 py-1 focus:outline-none">
+            <option value="ALL">All 7 Courses</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Dynamic Workspace View Container -->
+      <div id="workspaceContainer" class="min-h-[420px]"></div>
+    </section>
+
+    <!-- Bottom Grid: Course Mastery Breakdown + GitHub Commit Log -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+      <!-- Course Mastery Bars -->
+      <div class="lg:col-span-2 bg-gh-canvas border border-gh-border rounded-xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-mono uppercase tracking-wider text-gh-muted font-semibold">
+            Course Progress (Up to Current Week)
+          </h3>
+          <span class="text-xs font-mono text-gh-muted">Studied / Scheduled so far</span>
+        </div>
+        <div id="courseProgressList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+      </div>
+
+      <!-- GitHub Style Commit Activity Log -->
+      <div class="bg-gh-canvas border border-gh-border rounded-xl p-5 flex flex-col justify-between space-y-4">
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-mono uppercase tracking-wider text-gh-muted font-semibold flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-gh-green4"></span>
+              <span>Recent Study Commits</span>
+            </h3>
+            <button onclick="clearCommitLog()" class="text-[11px] font-mono text-gh-muted hover:text-gh-text">Clear</button>
+          </div>
+          <div id="commitLogContainer" class="space-y-2.5 max-h-64 overflow-y-auto pr-1"></div>
+        </div>
+
+        <div class="pt-3 border-t border-gh-border flex items-center justify-between text-[11px] font-mono text-gh-muted">
+          <span>branch: <strong class="text-gh-text">fall-2026</strong></span>
+          <span>Auto-saved locally</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Lecture Note & Checklist Drawer Modal -->
+  <div id="sessionModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-gh-canvas border border-gh-border rounded-xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-start justify-between gap-3 border-b border-gh-border pb-3">
+        <div>
+          <div id="modalCourseBadge" class="text-xs font-mono text-blue-400"></div>
+          <h3 id="modalSessionTitle" class="text-lg font-bold text-gh-text mt-0.5"></h3>
+          <p id="modalSessionTime" class="text-xs font-mono text-gh-muted mt-0.5"></p>
+        </div>
+        <button onclick="closeSessionModal()" class="text-gh-muted hover:text-gh-text text-lg leading-none px-2 py-1">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-mono text-gh-muted mb-1">Custom Topic / Lecture Title</label>
+          <input id="modalTopicInput" type="text" placeholder="e.g., 2D Force Systems & Equilibrium, Orthogonal Projection..." class="w-full bg-gh-bg border border-gh-border rounded-lg px-3 py-2 text-sm text-gh-text focus:outline-none focus:border-blue-500" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-mono text-gh-muted mb-1">Study Status</label>
+            <select id="modalStatusSelect" class="w-full bg-gh-bg border border-gh-border rounded-lg px-2.5 py-2 text-xs font-mono text-gh-text focus:outline-none">
+              <option value="todo">⚪ Not Started</option>
+              <option value="attended">🔵 Attended Live</option>
+              <option value="inprogress">🟡 Studying / In Progress</option>
+              <option value="studied">🟢 Studied & Committed</option>
+              <option value="review">🔴 Needs Review / Quiz Prep</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-mono text-gh-muted mb-1">Biweekly Active This Week?</label>
+            <select id="modalSkippedSelect" class="w-full bg-gh-bg border border-gh-border rounded-lg px-2.5 py-2 text-xs font-mono text-gh-text focus:outline-none">
+              <option value="active">✅ Scheduled This Week</option>
+              <option value="offweek">⏸️ Off-Week / Canceled</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Checklists -->
+        <div class="bg-gh-bg border border-gh-border rounded-lg p-3 space-y-2">
+          <div class="text-xs font-mono text-gh-muted uppercase">Lecture Milestones</div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" id="modalCheckAttended" class="rounded bg-gh-canvas border-gh-border text-green-500" />
+              <span>Attended / Watched</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" id="modalCheckNotes" class="rounded bg-gh-canvas border-gh-border text-green-500" />
+              <span>Wrote OneNote Summary</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" id="modalCheckSheet" class="rounded bg-gh-canvas border-gh-border text-green-500" />
+              <span>Solved Sheet / Assignment</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-mono text-gh-muted mb-1">Study Notes / Important Formulas / Quiz Reminders</label>
+          <textarea id="modalNotesInput" rows="4" placeholder="Add page numbers, sheet problems to revisit, or quiz dates..." class="w-full bg-gh-bg border border-gh-border rounded-lg px-3 py-2 text-sm text-gh-text focus:outline-none focus:border-blue-500"></textarea>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-gh-border">
+        <button onclick="closeSessionModal()" class="px-3 py-1.5 rounded-lg bg-gh-bg border border-gh-border text-xs font-mono text-gh-muted hover:text-gh-text">Cancel</button>
+        <button onclick="saveModalChanges()" class="px-4 py-1.5 rounded-lg bg-[#238636] hover:bg-[#2ea043] text-xs font-mono font-semibold text-white transition">
+          Commit Changes
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / Edit Quiz & Midterm Modal -->
+  <div id="examModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-gh-canvas border border-gh-border rounded-xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-start justify-between gap-3 border-b border-gh-border pb-3">
+        <div>
+          <div class="text-xs font-mono text-rose-400 uppercase">Exam & Assessment Radar</div>
+          <h3 id="examModalHeader" class="text-lg font-bold text-gh-text mt-0.5">Add Quiz / Midterm</h3>
+        </div>
+        <button onclick="closeExamModal()" class="text-gh-muted hover:text-gh-text text-lg leading-none px-2 py-1">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-mono text-gh-muted mb-1">Course</label>
+            <select id="examCourseSelect" class="w-full bg-gh-bg border border-gh-border rounded-lg px-2.5 py-2 text-xs font-mono text-gh-text focus:outline-none"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-mono text-gh-muted mb-1">Assessment Type</label>
+            <select id="examTypeSelect" class="w-full bg-gh-bg border border-gh-border rounded-lg px-2.5 py-2 text-xs font-mono text-gh-text focus:outline-none">
+              <option value="Quiz">⚡ Quiz</option>
+              <option value="Midterm">🔥 Midterm Exam</option>
+              <option value="Lab Exam">🔬 Lab / Workshop Exam</option>
+              <option value="Final">🏆 Final Exam</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-mono text-gh-muted mb-1">Title / Label</label>
+          <input id="examTitleInput" type="text" placeholder="e.g., Quiz 1 (2D Equilibrium), Midterm Exam..." class="w-full bg-gh-bg border border-gh-border rounded-lg px-3 py-2 text-sm text-gh-text focus:outline-none focus:border-blue-500" />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-mono text-gh-muted mb-1">Date & Start Time</label>
+            <input id="examDateTimeInput" type="datetime-local" class="w-full bg-gh-bg border border-gh-border rounded-lg px-2.5 py-2 text-xs font-mono text-gh-text focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-mono text-gh-muted mb-1">Hall / Location (المدرج / المكان)</label>
+            <input id="examLocationInput" type="text" placeholder="e.g., مدرج 173 / مدرج 255 / Workshop" class="w-full bg-gh-bg border border-gh-border rounded-lg px-3 py-2 text-xs font-mono text-gh-text focus:outline-none focus:border-blue-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-mono text-gh-muted mb-1">Included Up To College Week</label>
+            <select id="examScopeWeekSelect" class="w-full bg-gh-bg border border-gh-border rounded-lg px-2.5 py-2 text-xs font-mono text-gh-text focus:outline-none"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-mono text-gh-muted mb-1">Topics / Scope Note</label>
+            <input id="examNotesInput" type="text" placeholder="e.g., Lec 1 + Sheet 1 included" class="w-full bg-gh-bg border border-gh-border rounded-lg px-3 py-2 text-xs text-gh-text focus:outline-none focus:border-blue-500" />
+          </div>
+        </div>
+
+        <div id="examValidationMsg" class="hidden text-xs font-mono text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">
+          Please enter a valid date and time for the exam.
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-3 border-t border-gh-border">
+        <button id="deleteExamBtn" onclick="deleteActiveExam()" class="hidden px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-mono text-rose-300 transition">
+          Delete
+        </button>
+        <div class="flex items-center gap-2 ml-auto">
+          <button onclick="closeExamModal()" class="px-3 py-1.5 rounded-lg bg-gh-bg border border-gh-border text-xs font-mono text-gh-muted hover:text-gh-text">Cancel</button>
+          <button onclick="saveExamModal()" class="px-4 py-1.5 rounded-lg bg-[#238636] hover:bg-[#2ea043] text-xs font-mono font-semibold text-white transition">
+            Save Countdown
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /********************************************************************
+     * 1. AIN SHAMS ENGINEERING COURSES, SCHEDULE & DEFAULT QUIZZES
+     ********************************************************************/
+    const TOTAL_WEEKS = 14;
+    const STORAGE_KEY = 'asu_eng_lecture_tracker_v2';
+    const LEGACY_STORAGE_KEY = 'asu_eng_lecture_tracker_v1';
+
+    const COURSES = [
+      {
+        id: 'PROD',
+        code: 'PROD-101',
+        name: 'Production Engineering',
+        color: '#f97316',
+        badgeBg: 'bg-orange-500/15 text-orange-300 border-orange-500/30'
+      },
+      {
+        id: 'MATH',
+        code: 'MATH-101',
+        name: 'Mathematics (1)',
+        color: '#3b82f6',
+        badgeBg: 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+      },
+      {
+        id: 'STAT',
+        code: 'MECH-101',
+        name: 'Statics',
+        color: '#10b981',
+        badgeBg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+      },
+      {
+        id: 'ELEC',
+        code: 'PHYS-101',
+        name: 'Electricity & Magnetism',
+        color: '#eab308',
+        badgeBg: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30'
+      },
+      {
+        id: 'PROJ',
+        code: 'DRAW-101',
+        name: 'Projection & Eng. Graphics',
+        color: '#a855f7',
+        badgeBg: 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+      },
+      {
+        id: 'SEL',
+        code: 'GEN-101',
+        name: 'Selected Topics',
+        color: '#06b6d4',
+        badgeBg: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+      },
+      {
+        id: 'CRIT',
+        code: 'HUM-101',
+        name: 'Critical Thinking',
+        color: '#ec4899',
+        badgeBg: 'bg-pink-500/15 text-pink-300 border-pink-500/30'
+      }
+    ];
+
+    const DEFAULT_EXAMS = [
+      {
+        id: 'quiz-prod-1',
+        courseId: 'PROD',
+        type: 'Quiz',
+        title: 'Production Quiz 1',
+        dateTime: '2026-10-21T08:00',
+        location: 'Workshop / Tutorial Time',
+        maxWeekScope: 2,
+        notes: 'During Wednesday 8:00 AM Workshop/Tutorial slot',
+        completed: false
+      },
+      {
+        id: 'quiz-proj-1',
+        courseId: 'PROJ',
+        type: 'Quiz',
+        title: 'Projection & Graphics Quiz 1',
+        dateTime: '2026-10-22T10:00',
+        location: 'مدرج 255 (Hall 255)',
+        maxWeekScope: 2,
+        notes: 'During section time in Hall 255',
+        completed: false
+      },
+      {
+        id: 'quiz-stat-1',
+        courseId: 'STAT',
+        type: 'Quiz',
+        title: 'Statics Quiz 1',
+        dateTime: '2026-10-28T15:30',
+        location: 'مدرج 173 (Hall 173)',
+        maxWeekScope: 3,
+        notes: 'Wednesday in Hall 173',
+        completed: false
+      },
+      {
+        id: 'midterm-w7',
+        courseId: 'ALL',
+        type: 'Midterm',
+        title: 'Midterm Exams Start (Week 7)',
+        dateTime: '2026-11-23T09:00',
+        location: 'Ain Shams Engineering Halls',
+        maxWeekScope: 6,
+        notes: 'Click ✎ to customize or add individual course midterms',
+        completed: false
+      }
+    ];
+
+    const SCHEDULE_TEMPLATE = [
+      // MONDAYS
+      {
+        slotId: 'MON-PROD-LEC',
+        courseId: 'PROD',
+        type: 'Lecture',
+        dayIndex: 1,
+        dayName: 'Monday',
+        startTime: '08:00',
+        endTime: '09:50',
+        timeLabel: '8:00 AM – 9:50 AM',
+        frequency: 'weekly'
+      },
+      {
+        slotId: 'MON-MATH-TUT',
+        courseId: 'MATH',
+        type: 'Tutorial',
+        dayIndex: 1,
+        dayName: 'Monday',
+        startTime: '10:00',
+        endTime: '11:50',
+        timeLabel: '10:00 AM – 11:50 AM',
+        frequency: 'weekly'
+      },
+      {
+        slotId: 'MON-ELEC-LAB',
+        courseId: 'ELEC',
+        type: 'Lab',
+        dayIndex: 1,
+        dayName: 'Monday',
+        startTime: '12:30',
+        endTime: '14:20',
+        timeLabel: '12:30 PM – 2:20 PM',
+        frequency: 'biweekly'
+      },
+      {
+        slotId: 'MON-STAT-LEC',
+        courseId: 'STAT',
+        type: 'Lecture',
+        dayIndex: 1,
+        dayName: 'Monday',
+        startTime: '14:30',
+        endTime: '16:20',
+        timeLabel: '2:30 PM – 4:20 PM',
+        frequency: 'weekly'
+      },
+      {
+        slotId: 'MON-SEL-LEC',
+        courseId: 'SEL',
+        type: 'Lecture',
+        dayIndex: 1,
+        dayName: 'Monday',
+        startTime: '21:00',
+        endTime: '22:30',
+        timeLabel: '9:00 PM – 10:30 PM',
+        frequency: 'weekly'
+      },
+
+      // TUESDAYS
+      {
+        slotId: 'TUE-PROJ-LEC',
+        courseId: 'PROJ',
+        type: 'Lecture',
+        dayIndex: 2,
+        dayName: 'Tuesday',
+        startTime: '15:30',
+        endTime: '17:20',
+        timeLabel: '3:30 PM – 5:20 PM',
+        frequency: 'biweekly'
+      },
+      {
+        slotId: 'TUE-SEL-TUT',
+        courseId: 'SEL',
+        type: 'Tutorial',
+        dayIndex: 2,
+        dayName: 'Tuesday',
+        startTime: '19:30',
+        endTime: '21:00',
+        timeLabel: '7:30 PM – 9:00 PM',
+        frequency: 'weekly'
+      },
+      {
+        slotId: 'TUE-CRIT-LEC',
+        courseId: 'CRIT',
+        type: 'Lecture',
+        dayIndex: 2,
+        dayName: 'Tuesday',
+        startTime: '21:00',
+        endTime: '22:30',
+        timeLabel: '9:00 PM – 10:30 PM',
+        frequency: 'weekly'
+      },
+
+      // WEDNESDAYS
+      {
+        slotId: 'WED-PROD-TUT',
+        courseId: 'PROD',
+        type: 'Tutorial',
+        dayIndex: 3,
+        dayName: 'Wednesday',
+        startTime: '08:00',
+        endTime: '09:50',
+        timeLabel: '8:00 AM – 9:50 AM',
+        frequency: 'weekly'
+      },
+      {
+        slotId: 'WED-PROJ-LAB',
+        courseId: 'PROJ',
+        type: 'Lab',
+        dayIndex: 3,
+        dayName: 'Wednesday',
+        startTime: '10:00',
+        endTime: '12:20',
+        timeLabel: '10:00 AM – 12:20 PM',
+        frequency: 'biweekly'
+      },
+      {
+        slotId: 'WED-MATH-LEC',
+        courseId: 'MATH',
+        type: 'Lecture',
+        dayIndex: 3,
+        dayName: 'Wednesday',
+        startTime: '12:30',
+        endTime: '15:20',
+        timeLabel: '12:30 PM – 3:20 PM',
+        frequency: 'weekly'
+      },
+      {
+        slotId: 'WED-STAT-TUT',
+        courseId: 'STAT',
+        type: 'Tutorial',
+        dayIndex: 3,
+        dayName: 'Wednesday',
+        startTime: '15:30',
+        endTime: '17:20',
+        timeLabel: '3:30 PM – 5:20 PM',
+        frequency: 'weekly'
+      },
+      {
+        slotId: 'WED-CRIT-TUT',
+        courseId: 'CRIT',
+        type: 'Tutorial',
+        dayIndex: 3,
+        dayName: 'Wednesday',
+        startTime: '20:00',
+        endTime: '21:30',
+        timeLabel: '8:00 PM – 9:30 PM',
+        frequency: 'weekly'
+      },
+
+      // THURSDAYS
+      {
+        slotId: 'THU-ELEC-LEC',
+        courseId: 'ELEC',
+        type: 'Lecture',
+        dayIndex: 4,
+        dayName: 'Thursday',
+        startTime: '08:00',
+        endTime: '09:50',
+        timeLabel: '8:00 AM – 9:50 AM',
+        frequency: 'weekly'
+      }
+    ];
+
+    const STATUS_META = {
+      todo:       { label: 'Not Started', bg: 'bg-gh-bg text-gh-muted border-gh-border', dot: 'bg-gray-500', next: 'attended' },
+      attended:   { label: 'Attended',    bg: 'bg-blue-500/15 text-blue-300 border-blue-500/40', dot: 'bg-blue-400', next: 'inprogress' },
+      inprogress: { label: 'In Progress', bg: 'bg-amber-500/15 text-amber-300 border-amber-500/40', dot: 'bg-amber-400', next: 'studied' },
+      studied:    { label: 'Studied ✓',   bg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', dot: 'bg-gh-green4', next: 'todo' },
+      review:     { label: 'Needs Review',bg: 'bg-rose-500/20 text-rose-300 border-rose-500/40', dot: 'bg-rose-400', next: 'studied' }
+    };
+
+    /********************************************************************
+     * 2. STATE MANAGEMENT & DATE / WEEK ENGINE
+     ********************************************************************/
+    let appState = {
+      semesterStartMonday: '2026-10-12',
+      records: {},
+      commits: [],
+      exams: [...DEFAULT_EXAMS]
+    };
+
+    let currentCalculatedWeek = 2;
+    let selectedWeek = 2;
+    let activeView = 'week';
+    let activeModalKey = null;
+    let activeEditingExamId = null;
+    let showCompletedExams = false;
+    let toastTimeout = null;
+
+    function showToast(message, icon = '✓') {
+      const banner = document.getElementById('toastBanner');
+      const msgEl = document.getElementById('toastMessage');
+      const iconEl = document.getElementById('toastIcon');
+      if (!banner) return;
+
+      msgEl.textContent = message;
+      iconEl.textContent = icon;
+      banner.classList.remove('hidden');
+      banner.classList.add('flex');
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        banner.classList.add('hidden');
+        banner.classList.remove('flex');
+      }, 2800);
+    }
+
+    function loadState() {
+      try {
+        const savedV2 = localStorage.getItem(STORAGE_KEY);
+        const savedV1 = localStorage.getItem(LEGACY_STORAGE_KEY);
+        const raw = savedV2 || savedV1;
+
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          appState = {
+            ...appState,
+            ...parsed,
+            exams: parsed.exams && parsed.exams.length > 0 ? parsed.exams : [...DEFAULT_EXAMS]
+          };
+        }
+      } catch (e) {
+        console.warn('Local storage access restricted or empty:', e);
+      }
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      } catch (e) {
+        console.warn('Could not persist to localStorage:', e);
+      }
+    }
+
+    function getSessionKey(week, slotId) {
+      return `W${week}_${slotId}`;
+    }
+
+    function getSessionRecord(week, slot) {
+      const key = getSessionKey(week, slot.slotId);
+      if (!appState.records[key]) {
+        appState.records[key] = {
+          status: 'todo',
+          topic: '',
+          notes: '',
+          attended: false,
+          sheet: false,
+          summary: false,
+          offweek: false
+        };
+      }
+      return appState.records[key];
+    }
+
+    function computeCurrentCollegeWeek() {
+      const now = new Date();
+      const startParts = appState.semesterStartMonday.split('-').map(Number);
+      const startMonday = new Date(startParts[0], startParts[1] - 1, startParts[2], 0, 0, 0);
+      const diffMs = now.getTime() - startMonday.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const weekNum = Math.floor(diffDays / 7) + 1;
+      return Math.max(1, Math.min(TOTAL_WEEKS, weekNum));
+    }
+
+    function getDateForWeekAndDay(weekNum, dayIndex) {
+      const startParts = appState.semesterStartMonday.split('-').map(Number);
+      const d = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+      d.setDate(d.getDate() + (weekNum - 1) * 7 + (dayIndex - 1));
+      return d;
+    }
+
+    function formatShortDate(dateObj) {
+      return dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    /********************************************************************
+     * 3. INITIALIZATION & UI RENDERING
+     ********************************************************************/
+    function initApp() {
+      loadState();
+
+      const courseSelect = document.getElementById('courseFilter');
+      const examCourseSelect = document.getElementById('examCourseSelect');
+
+      // Reset dropdowns to avoid duplicates if re-initialized
+      courseSelect.innerHTML = '<option value="ALL">All 7 Courses</option>';
+      examCourseSelect.innerHTML = '';
+
+      COURSES.forEach(c => {
+        const opt1 = document.createElement('option');
+        opt1.value = c.id;
+        opt1.textContent = `${c.code} · ${c.name}`;
+        courseSelect.appendChild(opt1);
+
+        const opt2 = document.createElement('option');
+        opt2.value = c.id;
+        opt2.textContent = `${c.code} · ${c.name}`;
+        examCourseSelect.appendChild(opt2);
+      });
+
+      const allCoursesOpt = document.createElement('option');
+      allCoursesOpt.value = 'ALL';
+      allCoursesOpt.textContent = 'ALL · General / All Courses';
+      examCourseSelect.appendChild(allCoursesOpt);
+
+      const scopeSelect = document.getElementById('examScopeWeekSelect');
+      scopeSelect.innerHTML = '';
+      for (let w = 1; w <= TOTAL_WEEKS; w++) {
+        const opt = document.createElement('option');
+        opt.value = w;
+        opt.textContent = `Up to Week ${w}`;
+        scopeSelect.appendChild(opt);
+      }
+
+      const startInput = document.getElementById('semesterStartInput');
+      startInput.value = appState.semesterStartMonday;
+      startInput.onchange = (e) => {
+        if (e.target.value) {
+          appState.semesterStartMonday = e.target.value;
+          saveState();
+          currentCalculatedWeek = computeCurrentCollegeWeek();
+          selectedWeek = currentCalculatedWeek;
+          refreshAll();
+          showToast(`Calibrated Week 1 start to ${e.target.value}`);
+        }
+      };
+
+      currentCalculatedWeek = computeCurrentCollegeWeek();
+      selectedWeek = currentCalculatedWeek;
+
+      refreshAll();
+
+      setInterval(() => {
+        updateLiveExamTimers();
+      }, 1000);
+    }
+
+    function refreshAll() {
+      currentCalculatedWeek = computeCurrentCollegeWeek();
+      updateHeaderAndLiveClock();
+      populateWeekDropdown();
+      renderExamCountdownHub();
+      renderTodayBanner();
+      renderHeatmap();
+      renderActiveView();
+      renderCourseProgress();
+      renderCommitLog();
+      updateQuickStats();
+    }
+
+    function updateHeaderAndLiveClock() {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      document.getElementById('liveDateDisplay').textContent = dateStr;
+
+      const wMon = getDateForWeekAndDay(currentCalculatedWeek, 1);
+      const wThu = getDateForWeekAndDay(currentCalculatedWeek, 4);
+      document.getElementById('liveWeekBadge').textContent =
+        `College Week ${currentCalculatedWeek} (${formatShortDate(wMon)} – ${formatShortDate(wThu)})`;
+
+      const parityEl = document.getElementById('weekParityBadge');
+      const isEven = selectedWeek % 2 === 0;
+      parityEl.textContent = `Viewing Week ${selectedWeek} (${isEven ? 'Even Week' : 'Odd Week'})`;
+    }
+
+    function populateWeekDropdown() {
+      const sel = document.getElementById('weekSelectDropdown');
+      sel.innerHTML = '';
+      for (let w = 1; w <= TOTAL_WEEKS; w++) {
+        const mon = getDateForWeekAndDay(w, 1);
+        const thu = getDateForWeekAndDay(w, 4);
+        const opt = document.createElement('option');
+        opt.value = w;
+        const isCurrent = w === currentCalculatedWeek ? ' ★ CURRENT' : '';
+        opt.textContent = `Week ${w} (${formatShortDate(mon)} - ${formatShortDate(thu)})${isCurrent}`;
+        if (w === selectedWeek) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+
+    /********************************************************************
+     * 4. QUIZ & MIDTERM COUNTDOWN HUB
+     ********************************************************************/
+    function computeExamReadiness(exam) {
+      const maxW = exam.maxWeekScope || currentCalculatedWeek;
+      const relevantSlots = exam.courseId === 'ALL'
+        ? SCHEDULE_TEMPLATE
+        : SCHEDULE_TEMPLATE.filter(s => s.courseId === exam.courseId);
+
+      let total = 0;
+      let studied = 0;
+
+      for (let w = 1; w <= maxW; w++) {
+        relevantSlots.forEach(slot => {
+          const rec = getSessionRecord(w, slot);
+          if (!rec.offweek) {
+            total++;
+            if (rec.status === 'studied') studied++;
+          }
+        });
+      }
+
+      const pct = total > 0 ? Math.round((studied / total) * 100) : 0;
+      return { studied, total, pct };
+    }
+
+    function formatCountdownParts(targetDateStr) {
+      const now = new Date().getTime();
+      const target = new Date(targetDateStr).getTime();
+      const diff = target - now;
+
+      if (isNaN(target)) {
+        return { expired: false, days: 0, hours: 0, mins: 0, secs: 0, totalHours: 999 };
+      }
+
+      if (diff <= 0) {
+        return { expired: true, days: 0, hours: 0, mins: 0, secs: 0, totalHours: 0 };
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((diff % (1000 * 60)) / 1000);
+      const totalHours = diff / (1000 * 60 * 60);
+
+      return { expired: false, days, hours, mins, secs, totalHours };
+    }
+
+    function renderExamCountdownHub() {
+      const grid = document.getElementById('examCountdownGrid');
+      if (!grid) return;
+
+      const sortedExams = [...appState.exams].sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        return new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime();
+      });
+
+      const completedCount = sortedExams.filter(e => e.completed).length;
+      const activeCount = sortedExams.filter(e => !e.completed).length;
+
+      document.getElementById('activeExamsCountBadge').textContent = `${activeCount} Upcoming`;
+      document.getElementById('toggleCompletedExamsBtn').textContent =
+        showCompletedExams ? `Hide Completed (${completedCount})` : `Show Completed (${completedCount})`;
+
+      const visibleExams = sortedExams.filter(e => showCompletedExams || !e.completed);
+
+      if (visibleExams.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full bg-gh-bg border border-dashed border-gh-border rounded-xl p-6 text-center text-xs font-mono text-gh-muted">
+            No active quizzes or midterms on the radar. Click "+ Add Quiz / Midterm" to add one!
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = visibleExams.map(exam => {
+        const course = COURSES.find(c => c.id === exam.courseId) || {
+          code: 'ALL-ENG',
+          name: 'All Courses',
+          color: '#a855f7',
+          badgeBg: 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+        };
+
+        const cd = formatCountdownParts(exam.dateTime);
+        const readiness = computeExamReadiness(exam);
+        const examDateObj = new Date(exam.dateTime);
+        const formattedDate = examDateObj.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric'
+        });
+        const formattedTime = examDateObj.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+
+        const isUrgent = !exam.completed && !cd.expired && cd.totalHours <= 72;
+        const typeColor =
+          exam.type === 'Midterm' || exam.type === 'Final'
+            ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+            : isUrgent
+            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+            : 'bg-blue-500/20 text-blue-300 border-blue-500/40';
+
+        return `
+          <div class="bg-gh-bg border ${isUrgent ? 'border-rose-500/60 urgent-glow' : 'border-gh-border'} ${exam.completed ? 'opacity-55' : ''} rounded-xl p-4 flex flex-col justify-between gap-3 transition hover:border-gray-500">
+            <!-- Top Row: Badges & Actions -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="px-2 py-0.5 rounded-md text-[10px] font-mono border ${course.badgeBg}">${course.code}</span>
+                  <span class="px-2 py-0.5 rounded-md text-[10px] font-mono border ${typeColor}">
+                    ${isUrgent ? '🔥 URGENT · ' : ''}${exam.type}
+                  </span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button onclick="toggleExamCompleted('${exam.id}')" class="px-1.5 py-0.5 rounded-md bg-gh-canvas hover:bg-gh-elevated border border-gh-border text-[10px] font-mono ${exam.completed ? 'text-gh-green4' : 'text-gh-muted hover:text-gh-text'}" title="Mark Quiz/Midterm as Done">
+                    ${exam.completed ? '✓ Done' : '○ Done'}
+                  </button>
+                  <button onclick="openExamModal('${exam.id}')" class="px-1.5 py-0.5 rounded-md bg-gh-canvas hover:bg-gh-elevated border border-gh-border text-[10px] font-mono text-gh-muted hover:text-gh-text" title="Edit Exam">
+                    ✎
+                  </button>
+                </div>
+              </div>
+
+              <h3 class="font-bold text-sm text-gh-text truncate" title="${escapeHtml(exam.title)}">
+                ${escapeHtml(exam.title)}
+              </h3>
+
+              <div class="text-[11px] font-mono text-gh-muted space-y-0.5">
+                <div class="flex items-center gap-1.5">
+                  <span>📅</span>
+                  <span class="text-gh-text">${formattedDate}</span>
+                  <span>•</span>
+                  <span>${formattedTime}</span>
+                </div>
+                <div class="flex items-center gap-1.5 truncate">
+                  <span>📍</span>
+                  <span class="truncate" title="${escapeHtml(exam.location || 'TBA')}">${escapeHtml(exam.location || 'TBA')}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Middle: Live Digital Countdown Box -->
+            <div class="bg-gh-canvas border border-gh-border rounded-lg p-2.5 text-center" data-exam-timer="${exam.id}">
+              ${renderTimerInnerHTML(exam, cd)}
+            </div>
+
+            <!-- Bottom: Scope Readiness Bar -->
+            <div class="space-y-1.5 pt-1 border-t border-gh-border/70">
+              <div class="flex items-center justify-between text-[11px] font-mono">
+                <span class="text-gh-muted">Scope (W1–W${exam.maxWeekScope || 2}) Readiness</span>
+                <span class="${readiness.pct === 100 ? 'text-gh-green4 font-bold' : 'text-gh-text'}">${readiness.studied}/${readiness.total} (${readiness.pct}%)</span>
+              </div>
+              <div class="w-full h-1.5 bg-gh-canvas rounded-full overflow-hidden border border-gh-border">
+                <div class="h-full transition-all duration-300" style="width:${readiness.pct}%; background:${readiness.pct === 100 ? '#39d353' : course.color}"></div>
+              </div>
+              ${exam.notes ? `<div class="text-[10px] text-gh-muted truncate pt-0.5" title="${escapeHtml(exam.notes)}">📌 ${escapeHtml(exam.notes)}</div>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      updateNextExamQuickStat();
+    }
+
+    function renderTimerInnerHTML(exam, cd) {
+      if (exam.completed) {
+        return `<div class="text-xs font-mono font-semibold text-gh-green4 py-1">✅ COMPLETED & COMMITTED</div>`;
+      }
+      if (cd.expired) {
+        return `<div class="text-xs font-mono font-semibold text-amber-400 py-1">⚡ EXAM TIME REACHED / PASSED</div>`;
+      }
+      const pad = n => String(n).padStart(2, '0');
+      const textColor = cd.totalHours <= 72 ? 'text-rose-400' : 'text-gh-text';
+      return `
+        <div class="grid grid-cols-4 gap-1 font-mono">
+          <div>
+            <div class="text-base font-bold ${textColor}">${pad(cd.days)}</div>
+            <div class="text-[9px] text-gh-muted uppercase">Days</div>
+          </div>
+          <div>
+            <div class="text-base font-bold ${textColor}">${pad(cd.hours)}</div>
+            <div class="text-[9px] text-gh-muted uppercase">Hrs</div>
+          </div>
+          <div>
+            <div class="text-base font-bold ${textColor}">${pad(cd.mins)}</div>
+            <div class="text-[9px] text-gh-muted uppercase">Min</div>
+          </div>
+          <div>
+            <div class="text-base font-bold ${textColor}">${pad(cd.secs)}</div>
+            <div class="text-[9px] text-gh-muted uppercase">Sec</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function updateLiveExamTimers() {
+      appState.exams.forEach(exam => {
+        const timerEl = document.querySelector(`[data-exam-timer="${exam.id}"]`);
+        if (timerEl) {
+          const cd = formatCountdownParts(exam.dateTime);
+          timerEl.innerHTML = renderTimerInnerHTML(exam, cd);
+        }
+      });
+      updateNextExamQuickStat();
+    }
+
+    function updateNextExamQuickStat() {
+      const now = new Date().getTime();
+      const upcoming = appState.exams
+        .filter(e => !e.completed && new Date(e.dateTime).getTime() > now)
+        .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+
+      const cdEl = document.getElementById('statNextExamCountdown');
+      const nameEl = document.getElementById('statNextExamName');
+
+      if (upcoming.length === 0) {
+        cdEl.textContent = 'Clear ✓';
+        cdEl.className = 'text-lg font-mono font-bold text-gh-green4 mt-0.5';
+        nameEl.textContent = 'No pending quizzes';
+        return;
+      }
+
+      const next = upcoming[0];
+      const cd = formatCountdownParts(next.dateTime);
+      cdEl.textContent = `${cd.days}d ${cd.hours}h ${cd.mins}m`;
+      cdEl.className = `text-lg font-mono font-bold mt-0.5 ${cd.totalHours <= 72 ? 'text-rose-400' : 'text-amber-400'}`;
+      nameEl.textContent = `${next.title} (${next.location || ''})`;
+    }
+
+    function toggleShowCompletedExams() {
+      showCompletedExams = !showCompletedExams;
+      renderExamCountdownHub();
+    }
+
+    function toggleExamCompleted(examId) {
+      const exam = appState.exams.find(e => e.id === examId);
+      if (!exam) return;
+      exam.completed = !exam.completed;
+
+      if (exam.completed) {
+        const course = COURSES.find(c => c.id === exam.courseId);
+        addCommit(course ? course.code : 'EXAM', `completed ${exam.title}`);
+        showToast(`Marked "${exam.title}" as completed!`);
+      }
+
+      saveState();
+      refreshAll();
+    }
+
+    function openExamModal(examId = null) {
+      activeEditingExamId = examId;
+      const modal = document.getElementById('examModal');
+      const deleteBtn = document.getElementById('deleteExamBtn');
+      const validationMsg = document.getElementById('examValidationMsg');
+      validationMsg.classList.add('hidden');
+
+      if (examId) {
+        const exam = appState.exams.find(e => e.id === examId);
+        if (!exam) return;
+        document.getElementById('examModalHeader').textContent = 'Edit Quiz / Midterm';
+        document.getElementById('examCourseSelect').value = exam.courseId;
+        document.getElementById('examTypeSelect').value = exam.type;
+        document.getElementById('examTitleInput').value = exam.title;
+        document.getElementById('examDateTimeInput').value = exam.dateTime;
+        document.getElementById('examLocationInput').value = exam.location || '';
+        document.getElementById('examScopeWeekSelect').value = exam.maxWeekScope || currentCalculatedWeek;
+        document.getElementById('examNotesInput').value = exam.notes || '';
+        deleteBtn.classList.remove('hidden');
+      } else {
+        document.getElementById('examModalHeader').textContent = 'Add New Quiz / Midterm';
+        document.getElementById('examCourseSelect').value = 'STAT';
+        document.getElementById('examTypeSelect').value = 'Quiz';
+        document.getElementById('examTitleInput').value = '';
+        document.getElementById('examDateTimeInput').value = '2026-10-28T12:00';
+        document.getElementById('examLocationInput').value = '';
+        document.getElementById('examScopeWeekSelect').value = currentCalculatedWeek;
+        document.getElementById('examNotesInput').value = '';
+        deleteBtn.classList.add('hidden');
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeExamModal() {
+      const modal = document.getElementById('examModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      activeEditingExamId = null;
+    }
+
+    function saveExamModal() {
+      const courseId = document.getElementById('examCourseSelect').value;
+      const type = document.getElementById('examTypeSelect').value;
+      const courseObj = COURSES.find(c => c.id === courseId);
+      const rawTitle = document.getElementById('examTitleInput').value.trim();
+      const title = rawTitle || `${courseObj ? courseObj.name : 'Engineering'} ${type}`;
+      const dateTime = document.getElementById('examDateTimeInput').value;
+      const location = document.getElementById('examLocationInput').value.trim();
+      const maxWeekScope = parseInt(document.getElementById('examScopeWeekSelect').value, 10) || currentCalculatedWeek;
+      const notes = document.getElementById('examNotesInput').value.trim();
+
+      if (!dateTime) {
+        document.getElementById('examValidationMsg').classList.remove('hidden');
+        return;
+      }
+
+      if (activeEditingExamId) {
+        const idx = appState.exams.findIndex(e => e.id === activeEditingExamId);
+        if (idx !== -1) {
+          appState.exams[idx] = {
+            ...appState.exams[idx],
+            courseId,
+            type,
+            title,
+            dateTime,
+            location,
+            maxWeekScope,
+            notes
+          };
+        }
+        showToast(`Updated "${title}"`);
+      } else {
+        appState.exams.push({
+          id: 'exam-' + Date.now(),
+          courseId,
+          type,
+          title,
+          dateTime,
+          location,
+          maxWeekScope,
+          notes,
+          completed: false
+        });
+        showToast(`Added "${title}" to Countdown Radar`);
+      }
+
+      saveState();
+      closeExamModal();
+      refreshAll();
+    }
+
+    function deleteActiveExam() {
+      if (!activeEditingExamId) return;
+      appState.exams = appState.exams.filter(e => e.id !== activeEditingExamId);
+      saveState();
+      closeExamModal();
+      refreshAll();
+      showToast('Exam removed from radar', '🗑️');
+    }
+
+    /********************************************************************
+     * 5. TODAY'S RADAR BANNER
+     ********************************************************************/
+    function renderTodayBanner() {
+      const now = new Date();
+      const jsDay = now.getDay();
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      document.getElementById('todayDayLabel').textContent = `${dayNames[jsDay].toUpperCase()} · WEEK ${currentCalculatedWeek}`;
+
+      const todaysSlots = SCHEDULE_TEMPLATE.filter(s => s.dayIndex === jsDay);
+      const headlineEl = document.getElementById('todayHeadline');
+      const subtextEl = document.getElementById('todaySubtext');
+      const pillsEl = document.getElementById('todayQuickPills');
+      pillsEl.innerHTML = '';
+
+      if (todaysSlots.length === 0) {
+        headlineEl.textContent = `No scheduled university classes today (${dayNames[jsDay]}).`;
+        subtextEl.textContent = `Ideal day to clear any unstudied lectures from Week ${currentCalculatedWeek} or prep for upcoming quizzes.`;
+        return;
+      }
+
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      let studiedToday = 0;
+
+      todaysSlots.forEach(slot => {
+        const course = COURSES.find(c => c.id === slot.courseId);
+        const rec = getSessionRecord(currentCalculatedWeek, slot);
+        if (rec.status === 'studied') studiedToday++;
+
+        const [sh, sm] = slot.startTime.split(':').map(Number);
+        const [eh, em] = slot.endTime.split(':').map(Number);
+        const startMin = sh * 60 + sm;
+        const endMin = eh * 60 + em;
+
+        let timeState = 'upcoming';
+        if (nowMinutes >= startMin && nowMinutes <= endMin) timeState = 'live';
+        else if (nowMinutes > endMin) timeState = 'finished';
+
+        const btn = document.createElement('button');
+        btn.onclick = () => openSessionModal(currentCalculatedWeek, slot.slotId);
+        const statusMeta = STATUS_META[rec.status];
+
+        btn.className = `px-3 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-2 transition hover:scale-[1.02] ${
+          timeState === 'live'
+            ? 'bg-blue-500/20 border-blue-400 text-blue-200 ring-1 ring-blue-400/50'
+            : 'bg-gh-canvas border-gh-border text-gh-text'
+        }`;
+
+        btn.innerHTML = `
+          <span class="w-2 h-2 rounded-full ${statusMeta.dot}"></span>
+          <span class="font-semibold">${course.name}</span>
+          <span class="text-gh-muted">(${slot.type})</span>
+          <span class="text-[11px] text-gh-muted">${slot.startTime}</span>
+          ${timeState === 'live' ? '<span class="px-1.5 py-0.2 rounded bg-green-500/30 text-green-300 text-[10px]">LIVE NOW</span>' : ''}
+        `;
+        pillsEl.appendChild(btn);
+      });
+
+      headlineEl.textContent = `You have ${todaysSlots.length} scheduled sessions today (${studiedToday}/${todaysSlots.length} studied).`;
+      subtextEl.textContent = `Click any session pill on the right to log attendance, check off sheets, or mark as studied.`;
+    }
+
+    /********************************************************************
+     * 6. GITHUB CONTRIBUTION HEATMAP (14 WEEKS × 7 COURSES)
+     ********************************************************************/
+    function renderHeatmap() {
+      const container = document.getElementById('heatmapContainer');
+      container.innerHTML = '';
+
+      const headerRow = document.createElement('div');
+      headerRow.className = 'grid grid-cols-[190px_repeat(14,minmax(32px,1fr))] gap-1.5 items-center text-[11px] font-mono text-gh-muted pb-1';
+      headerRow.innerHTML = `<div>COURSE / WEEK</div>`;
+      for (let w = 1; w <= TOTAL_WEEKS; w++) {
+        const isCurr = w === currentCalculatedWeek;
+        const isSel = w === selectedWeek;
+        headerRow.innerHTML += `
+          <button onclick="selectWeek(${w})" class="text-center py-0.5 rounded-md transition ${
+            isCurr
+              ? 'bg-gh-green4/20 text-gh-green4 font-bold border border-gh-green4/40'
+              : isSel
+              ? 'bg-gh-elevated text-gh-text border border-gh-border'
+              : 'hover:text-gh-text'
+          }">W${w}</button>
+        `;
+      }
+      container.appendChild(headerRow);
+
+      COURSES.forEach(course => {
+        const courseSlots = SCHEDULE_TEMPLATE.filter(s => s.courseId === course.id);
+        const row = document.createElement('div');
+        row.className = 'grid grid-cols-[190px_repeat(14,minmax(32px,1fr))] gap-1.5 items-center';
+
+        row.innerHTML = `
+          <div class="flex items-center gap-2 pr-2 truncate">
+            <span class="w-2 h-2 rounded-full shrink-0" style="background:${course.color}"></span>
+            <span class="text-xs font-medium text-gh-text truncate" title="${course.name}">${course.name}</span>
+          </div>
+        `;
+
+        for (let w = 1; w <= TOTAL_WEEKS; w++) {
+          let activeSlots = 0;
+          let score = 0;
+
+          courseSlots.forEach(slot => {
+            const rec = getSessionRecord(w, slot);
+            if (rec.offweek) return;
+            activeSlots++;
+            if (rec.status === 'attended') score += 1;
+            else if (rec.status === 'inprogress' || rec.status === 'review') score += 2;
+            else if (rec.status === 'studied') score += (rec.sheet ? 3.5 : 3);
+          });
+
+          const maxScore = activeSlots * 3;
+          const ratio = maxScore > 0 ? score / maxScore : 0;
+
+          let colorClass = 'bg-[#0d1117] border-gh-border';
+          if (activeSlots === 0) {
+            colorClass = 'bg-gh-bg/40 border-gh-border/40 opacity-40';
+          } else if (ratio > 0 && ratio < 0.4) {
+            colorClass = 'bg-[#0e4429] border-[#0e4429]';
+          } else if (ratio >= 0.4 && ratio < 0.85) {
+            colorClass = 'bg-[#006d32] border-[#006d32]';
+          } else if (ratio >= 0.85 && ratio <= 1.0) {
+            colorClass = 'bg-[#26a641] border-[#26a641]';
+          } else if (ratio > 1.0) {
+            colorClass = 'bg-[#39d353] border-[#39d353]';
+          }
+
+          const isCurrentWeekCol = w === currentCalculatedWeek ? 'ring-1 ring-gh-green4/50' : '';
+
+          const cell = document.createElement('button');
+          cell.onclick = () => {
+            selectedWeek = w;
+            populateWeekDropdown();
+            updateHeaderAndLiveClock();
+            renderActiveView();
+          };
+          cell.title = `${course.name} — Week ${w}: ${Math.round(Math.min(100, ratio * 100))}% complete`;
+          cell.className = `h-6 rounded-[4px] border ${colorClass} ${isCurrentWeekCol} cell-hover transition relative`;
+          row.appendChild(cell);
+        }
+
+        container.appendChild(row);
+      });
+    }
+
+    /********************************************************************
+     * 7. NOTION DATABASE VIEWS (WEEKLY, SYLLABUS, KANBAN, BACKLOG)
+     ********************************************************************/
+    function switchView(viewName) {
+      activeView = viewName;
+      document.querySelectorAll('.view-tab').forEach(btn => {
+        btn.className = 'view-tab px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 text-gh-muted hover:text-gh-text border border-transparent';
+      });
+      const activeBtn = document.getElementById(`tab-${viewName}`);
+      if (activeBtn) {
+        activeBtn.className = 'view-tab px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 bg-gh-elevated text-gh-text border border-gh-border';
+      }
+      renderActiveView();
+    }
+
+    function selectWeek(weekNum) {
+      selectedWeek = Math.max(1, Math.min(TOTAL_WEEKS, weekNum));
+      populateWeekDropdown();
+      updateHeaderAndLiveClock();
+      renderHeatmap();
+      renderActiveView();
+      updateQuickStats();
+    }
+
+    function changeSelectedWeek(delta) {
+      selectWeek(selectedWeek + delta);
+    }
+
+    function jumpToCurrentWeek() {
+      selectWeek(currentCalculatedWeek);
+      showToast(`Jumped to current College Week ${currentCalculatedWeek}`);
+    }
+
+    function getFilteredSlots() {
+      const typeVal = document.getElementById('typeFilter').value;
+      const courseVal = document.getElementById('courseFilter').value;
+      return SCHEDULE_TEMPLATE.filter(slot => {
+        if (typeVal !== 'ALL' && slot.type !== typeVal) return false;
+        if (courseVal !== 'ALL' && slot.courseId !== courseVal) return false;
+        return true;
+      });
+    }
+
+    function renderActiveView() {
+      const container = document.getElementById('workspaceContainer');
+      if (activeView === 'week') renderWeeklyScheduleView(container);
+      else if (activeView === 'courses') renderCourseSyllabusView(container);
+      else if (activeView === 'kanban') renderKanbanView(container);
+      else if (activeView === 'backlog') renderBacklogView(container);
+    }
+
+    function renderWeeklyScheduleView(container) {
+      const slots = getFilteredSlots();
+      const days = [
+        { index: 1, name: 'Monday' },
+        { index: 2, name: 'Tuesday' },
+        { index: 3, name: 'Wednesday' },
+        { index: 4, name: 'Thursday' }
+      ];
+
+      let html = `<div class="space-y-4">`;
+
+      days.forEach(day => {
+        const daySlots = slots.filter(s => s.dayIndex === day.index);
+        if (daySlots.length === 0) return;
+
+        const dayDate = getDateForWeekAndDay(selectedWeek, day.index);
+        const isToday =
+          selectedWeek === currentCalculatedWeek &&
+          new Date().getDay() === day.index;
+
+        html += `
+          <div class="bg-gh-canvas border ${isToday ? 'border-blue-500/60' : 'border-gh-border'} rounded-xl overflow-hidden">
+            <div class="px-4 py-2.5 bg-gh-bg/60 border-b border-gh-border flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <span class="font-semibold text-sm text-gh-text">${day.name}</span>
+                <span class="text-xs font-mono text-gh-muted">${formatShortDate(dayDate)}</span>
+                ${isToday ? '<span class="px-2 py-0.5 text-[10px] font-mono rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">TODAY</span>' : ''}
+              </div>
+              <span class="text-xs font-mono text-gh-muted">${daySlots.length} sessions</span>
+            </div>
+            <div class="divide-y divide-gh-border">
+        `;
+
+        daySlots.forEach(slot => {
+          html += renderSessionRowHTML(selectedWeek, slot);
+        });
+
+        html += `</div></div>`;
+      });
+
+      html += `</div>`;
+      container.innerHTML = html;
+    }
+
+    function renderSessionRowHTML(weekNum, slot, showWeekTag = false) {
+      const course = COURSES.find(c => c.id === slot.courseId);
+      const rec = getSessionRecord(weekNum, slot);
+      const statusMeta = STATUS_META[rec.status];
+
+      const typeBadgeColor =
+        slot.type === 'Lecture'
+          ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+          : slot.type === 'Tutorial'
+          ? 'bg-teal-500/15 text-teal-300 border-teal-500/30'
+          : 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+
+      const defaultTopic = `${course.name} — Week ${weekNum} ${slot.type}`;
+      const displayTopic = rec.topic ? rec.topic : defaultTopic;
+
+      return `
+        <div class="px-4 py-3 hover:bg-gh-elevated/50 transition flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${rec.offweek ? 'opacity-45' : ''}">
+          <div class="flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-3 min-w-0">
+            <div class="w-36 shrink-0 font-mono text-xs text-gh-muted flex items-center gap-1.5">
+              <span>🕒</span>
+              <span>${slot.timeLabel}</span>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+              ${showWeekTag ? `<span class="px-2 py-0.5 rounded-md text-[11px] font-mono bg-gh-bg border border-gh-border text-gh-muted">W${weekNum} · ${slot.dayName.slice(0,3)}</span>` : ''}
+              <span class="px-2 py-0.5 rounded-md text-[11px] font-mono border ${course.badgeBg}">${course.code}</span>
+              <span class="px-2 py-0.5 rounded-md text-[11px] font-mono border ${typeBadgeColor}">${slot.type}</span>
+              ${slot.frequency === 'biweekly' ? `<span class="px-1.5 py-0.5 rounded-md text-[10px] font-mono bg-purple-500/15 text-purple-300 border border-purple-500/30">Biweekly</span>` : ''}
+            </div>
+
+            <div class="min-w-0 flex-1">
+              <div onclick="openSessionModal(${weekNum}, '${slot.slotId}')" class="text-sm font-medium text-gh-text hover:text-blue-400 cursor-pointer truncate">
+                ${escapeHtml(displayTopic)}
+                ${rec.offweek ? '<span class="ml-2 text-xs font-mono text-amber-400">(Off-Week)</span>' : ''}
+              </div>
+              ${rec.notes ? `<p class="text-xs text-gh-muted truncate mt-0.5">📝 ${escapeHtml(rec.notes)}</p>` : ''}
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between sm:justify-end gap-2.5 shrink-0">
+            <div class="flex items-center gap-2 text-xs font-mono text-gh-muted bg-gh-bg border border-gh-border rounded-lg px-2.5 py-1">
+              <label class="flex items-center gap-1 cursor-pointer hover:text-gh-text">
+                <input type="checkbox" ${rec.attended ? 'checked' : ''} onchange="toggleCheck(${weekNum}, '${slot.slotId}', 'attended')" class="rounded accent-blue-500 cursor-pointer" />
+                <span>Attended</span>
+              </label>
+              <span class="text-gh-border">|</span>
+              <label class="flex items-center gap-1 cursor-pointer hover:text-gh-text">
+                <input type="checkbox" ${rec.summary ? 'checked' : ''} onchange="toggleCheck(${weekNum}, '${slot.slotId}', 'summary')" class="rounded accent-purple-500 cursor-pointer" />
+                <span>Notes</span>
+              </label>
+              <span class="text-gh-border">|</span>
+              <label class="flex items-center gap-1 cursor-pointer hover:text-gh-text">
+                <input type="checkbox" ${rec.sheet ? 'checked' : ''} onchange="toggleCheck(${weekNum}, '${slot.slotId}', 'sheet')" class="rounded accent-emerald-500 cursor-pointer" />
+                <span>Sheet</span>
+              </label>
+            </div>
+
+            <button onclick="cycleStatus(${weekNum}, '${slot.slotId}')" class="px-3 py-1 rounded-lg border text-xs font-mono font-medium flex items-center gap-1.5 transition hover:scale-[1.03] ${statusMeta.bg}">
+              <span class="w-2 h-2 rounded-full ${statusMeta.dot}"></span>
+              <span>${statusMeta.label}</span>
+            </button>
+
+            <button onclick="openSessionModal(${weekNum}, '${slot.slotId}')" class="p-1.5 rounded-lg bg-gh-bg hover:bg-gh-elevated border border-gh-border text-gh-muted hover:text-gh-text text-xs font-mono">
+              ⋯
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderCourseSyllabusView(container) {
+      const selectedCourseFilter = document.getElementById('courseFilter').value;
+      const coursesToShow = selectedCourseFilter === 'ALL'
+        ? COURSES
+        : COURSES.filter(c => c.id === selectedCourseFilter);
+
+      let html = `<div class="grid grid-cols-1 gap-5">`;
+
+      coursesToShow.forEach(course => {
+        const courseSlots = SCHEDULE_TEMPLATE.filter(s => s.courseId === course.id);
+        html += `
+          <div class="bg-gh-canvas border border-gh-border rounded-xl overflow-hidden">
+            <div class="px-4 py-3 bg-gh-bg/70 border-b border-gh-border flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2.5">
+                <span class="w-3 h-3 rounded-full" style="background:${course.color}"></span>
+                <h3 class="font-bold text-sm text-gh-text">${course.name}</h3>
+                <span class="text-xs font-mono text-gh-muted">(${course.code})</span>
+              </div>
+              <span class="text-xs font-mono text-gh-muted">Weeks 1 – ${Math.max(selectedWeek, currentCalculatedWeek)}</span>
+            </div>
+            <div class="divide-y divide-gh-border">
+        `;
+
+        const maxWeekToShow = Math.max(selectedWeek, currentCalculatedWeek);
+        for (let w = 1; w <= maxWeekToShow; w++) {
+          courseSlots.forEach(slot => {
+            html += renderSessionRowHTML(w, slot, true);
+          });
+        }
+
+        html += `</div></div>`;
+      });
+
+      html += `</div>`;
+      container.innerHTML = html;
+    }
+
+    function renderKanbanView(container) {
+      const slots = getFilteredSlots();
+      const columns = [
+        { key: 'todo', title: 'Not Started', dot: 'bg-gray-400' },
+        { key: 'attended', title: 'Attended Live', dot: 'bg-blue-400' },
+        { key: 'inprogress', title: 'Studying / Solving', dot: 'bg-amber-400' },
+        { key: 'studied', title: 'Studied & Committed', dot: 'bg-gh-green4' }
+      ];
+
+      let html = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">`;
+
+      columns.forEach(col => {
+        const colSlots = slots.filter(slot => {
+          const rec = getSessionRecord(selectedWeek, slot);
+          if (col.key === 'inprogress' && rec.status === 'review') return true;
+          return rec.status === col.key;
+        });
+
+        html += `
+          <div class="bg-gh-canvas border border-gh-border rounded-xl p-3.5 flex flex-col gap-3">
+            <div class="flex items-center justify-between border-b border-gh-border pb-2.5">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full ${col.dot}"></span>
+                <h4 class="text-xs font-mono font-semibold uppercase text-gh-text">${col.title}</h4>
+              </div>
+              <span class="px-2 py-0.5 text-[11px] font-mono rounded-full bg-gh-bg border border-gh-border text-gh-muted">${colSlots.length}</span>
+            </div>
+            <div class="space-y-2.5 flex-1">
+        `;
+
+        if (colSlots.length === 0) {
+          html += `<div class="text-xs font-mono text-gh-muted text-center py-8 border border-dashed border-gh-border rounded-lg">No sessions in this stage</div>`;
+        } else {
+          colSlots.forEach(slot => {
+            const course = COURSES.find(c => c.id === slot.courseId);
+            const rec = getSessionRecord(selectedWeek, slot);
+            const statusMeta = STATUS_META[rec.status];
+            html += `
+              <div class="bg-gh-bg border border-gh-border rounded-lg p-3 space-y-2 hover:border-gray-500 transition">
+                <div class="flex items-center justify-between gap-1">
+                  <span class="px-2 py-0.5 rounded-md text-[10px] font-mono border ${course.badgeBg}">${course.code}</span>
+                  <span class="text-[11px] font-mono text-gh-muted">${slot.dayName.slice(0,3)} · ${slot.startTime}</span>
+                </div>
+                <div onclick="openSessionModal(${selectedWeek}, '${slot.slotId}')" class="text-xs font-semibold text-gh-text hover:text-blue-400 cursor-pointer">
+                  ${escapeHtml(rec.topic || `${course.name} (${slot.type})`)}
+                </div>
+                <div class="flex items-center justify-between pt-1">
+                  <span class="text-[10px] font-mono text-gh-muted">${slot.type}</span>
+                  <button onclick="cycleStatus(${selectedWeek}, '${slot.slotId}')" class="px-2 py-0.5 rounded-md text-[10px] font-mono border ${statusMeta.bg}">
+                    Move Next →
+                  </button>
+                </div>
+              </div>
+            `;
+          });
+        }
+
+        html += `</div></div>`;
+      });
+
+      html += `</div>`;
+      container.innerHTML = html;
+    }
+
+    function renderBacklogView(container) {
+      let backlogItems = [];
+      for (let w = 1; w <= currentCalculatedWeek; w++) {
+        SCHEDULE_TEMPLATE.forEach(slot => {
+          const rec = getSessionRecord(w, slot);
+          if (!rec.offweek && rec.status !== 'studied') {
+            backlogItems.push({ week: w, slot, rec });
+          }
+        });
+      }
+
+      if (backlogItems.length === 0) {
+        container.innerHTML = `
+          <div class="bg-gh-canvas border border-gh-border rounded-xl p-10 text-center space-y-2">
+            <div class="text-3xl">🎉</div>
+            <h3 class="text-base font-bold text-gh-green4 font-mono">Zero Backlog! Clean Working Tree</h3>
+            <p class="text-xs text-gh-muted">Every scheduled lecture and tutorial up through Week ${currentCalculatedWeek} has been studied and committed.</p>
+          </div>
+        `;
+        return;
+      }
+
+      let html = `
+        <div class="bg-gh-canvas border border-gh-border rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-amber-500/10 border-b border-gh-border flex items-center justify-between">
+            <span class="text-xs font-mono text-amber-300 font-semibold">
+              ⚠️ Pending Lectures & Tutorials from Weeks 1 – ${currentCalculatedWeek} (${backlogItems.length} remaining)
+            </span>
+            <span class="text-xs font-mono text-gh-muted">Click status pill to commit</span>
+          </div>
+          <div class="divide-y divide-gh-border">
+      `;
+
+      backlogItems.forEach(item => {
+        html += renderSessionRowHTML(item.week, item.slot, true);
+      });
+
+      html += `</div></div>`;
+      container.innerHTML = html;
+    }
+
+    /********************************************************************
+     * 8. INTERACTIONS & STATS
+     ********************************************************************/
+    function cycleStatus(weekNum, slotId) {
+      const slot = SCHEDULE_TEMPLATE.find(s => s.slotId === slotId);
+      const course = COURSES.find(c => c.id === slot.courseId);
+      const rec = getSessionRecord(weekNum, slot);
+
+      const nextStatus = STATUS_META[rec.status].next;
+      rec.status = nextStatus;
+
+      if (nextStatus === 'attended') rec.attended = true;
+      if (nextStatus === 'studied') {
+        rec.attended = true;
+        addCommit(course.code, `studied Week ${weekNum} ${slot.type} (${course.name})`);
+        showToast(`Committed: ${course.code} W${weekNum} ${slot.type}`);
+      }
+
+      saveState();
+      refreshAll();
+    }
+
+    function toggleCheck(weekNum, slotId, field) {
+      const slot = SCHEDULE_TEMPLATE.find(s => s.slotId === slotId);
+      const course = COURSES.find(c => c.id === slot.courseId);
+      const rec = getSessionRecord(weekNum, slot);
+
+      rec[field] = !rec[field];
+
+      if (field === 'attended' && rec.attended && rec.status === 'todo') {
+        rec.status = 'attended';
+      }
+      if (field === 'sheet' && rec.sheet) {
+        addCommit(course.code, `solved problem sheet for W${weekNum} ${course.name}`);
+        showToast(`Solved sheet for ${course.code} W${weekNum}`);
+      }
+
+      saveState();
+      refreshAll();
+    }
+
+    function addCommit(courseCode, actionText) {
+      const hash = Math.random().toString(16).substring(2, 8);
+      appState.commits.unshift({
+        id: hash,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        courseCode,
+        message: actionText
+      });
+      if (appState.commits.length > 35) appState.commits.pop();
+    }
+
+    function clearCommitLog() {
+      appState.commits = [];
+      saveState();
+      renderCommitLog();
+      showToast('Cleared commit log');
+    }
+
+    function updateQuickStats() {
+      let cwTotal = 0;
+      let cwStudied = 0;
+      SCHEDULE_TEMPLATE.forEach(slot => {
+        const rec = getSessionRecord(selectedWeek, slot);
+        if (!rec.offweek) {
+          cwTotal++;
+          if (rec.status === 'studied') cwStudied++;
+        }
+      });
+      const cwPct = cwTotal > 0 ? Math.round((cwStudied / cwTotal) * 100) : 0;
+      document.getElementById('statCurrentWeekProgress').textContent = `${cwStudied} / ${cwTotal}`;
+      document.getElementById('statCurrentWeekPct').textContent = `${cwPct}% in Week ${selectedWeek}`;
+
+      let elapsedTotal = 0;
+      let totalStudied = 0;
+      let backlogCount = 0;
+
+      for (let w = 1; w <= TOTAL_WEEKS; w++) {
+        SCHEDULE_TEMPLATE.forEach(slot => {
+          const rec = getSessionRecord(w, slot);
+          if (rec.offweek) return;
+          if (rec.status === 'studied') totalStudied++;
+          if (w <= currentCalculatedWeek) {
+            elapsedTotal++;
+            if (rec.status !== 'studied') backlogCount++;
+          }
+        });
+      }
+
+      document.getElementById('statTotalStudied').textContent = totalStudied;
+      document.getElementById('statTotalElapsed').textContent = `of ${elapsedTotal} elapsed`;
+      document.getElementById('statBacklogCount').textContent = backlogCount;
+      document.getElementById('backlogTabBadge').textContent = backlogCount;
+      document.getElementById('totalCommitsCounter').textContent = `${totalStudied} lectures committed`;
+    }
+
+    function renderCourseProgress() {
+      const container = document.getElementById('courseProgressList');
+      container.innerHTML = '';
+
+      COURSES.forEach(course => {
+        const courseSlots = SCHEDULE_TEMPLATE.filter(s => s.courseId === course.id);
+        let elapsed = 0;
+        let studied = 0;
+
+        for (let w = 1; w <= currentCalculatedWeek; w++) {
+          courseSlots.forEach(slot => {
+            const rec = getSessionRecord(w, slot);
+            if (!rec.offweek) {
+              elapsed++;
+              if (rec.status === 'studied') studied++;
+            }
+          });
+        }
+
+        const pct = elapsed > 0 ? Math.round((studied / elapsed) * 100) : 0;
+
+        const card = document.createElement('div');
+        card.className = 'bg-gh-bg border border-gh-border rounded-lg p-3 space-y-2';
+        card.innerHTML = `
+          <div class="flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2 truncate">
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${course.color}"></span>
+              <span class="font-semibold text-gh-text truncate">${course.name}</span>
+            </div>
+            <span class="font-mono text-gh-muted shrink-0">${studied}/${elapsed} (${pct}%)</span>
+          </div>
+          <div class="w-full h-2 bg-gh-canvas rounded-full overflow-hidden border border-gh-border">
+            <div class="h-full transition-all duration-300" style="width:${pct}%; background:${course.color}"></div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderCommitLog() {
+      const container = document.getElementById('commitLogContainer');
+      if (!appState.commits || appState.commits.length === 0) {
+        container.innerHTML = `
+          <div class="text-xs font-mono text-gh-muted py-6 text-center border border-dashed border-gh-border rounded-lg">
+            No study commits yet. Mark a lecture as "Studied ✓" to generate your first commit!
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = appState.commits
+        .map(
+          c => `
+        <div class="text-xs font-mono flex items-start gap-2 border-l-2 border-gh-green3 pl-2.5 py-0.5">
+          <span class="text-gh-green4 shrink-0">${c.id}</span>
+          <div class="min-w-0 flex-1">
+            <span class="text-blue-400">feat(${c.courseCode}):</span>
+            <span class="text-gh-text"> ${escapeHtml(c.message)}</span>
+          </div>
+          <span class="text-[10px] text-gh-muted shrink-0">${c.timestamp}</span>
+        </div>
+      `
+        )
+        .join('');
+    }
+
+    /********************************************************************
+     * 9. SESSION MODAL DRAWER, JSON BACKUP & DIRECT HTML FILE DOWNLOAD
+     ********************************************************************/
+    function openSessionModal(weekNum, slotId) {
+      activeModalKey = { weekNum, slotId };
+      const slot = SCHEDULE_TEMPLATE.find(s => s.slotId === slotId);
+      const course = COURSES.find(c => c.id === slot.courseId);
+      const rec = getSessionRecord(weekNum, slot);
+
+      document.getElementById('modalCourseBadge').textContent = `${course.code} · WEEK ${weekNum} · ${slot.type.toUpperCase()}`;
+      document.getElementById('modalSessionTitle').textContent = course.name;
+      document.getElementById('modalSessionTime').textContent = `${slot.dayName}s, ${slot.timeLabel}`;
+
+      document.getElementById('modalTopicInput').value = rec.topic || '';
+      document.getElementById('modalStatusSelect').value = rec.status;
+      document.getElementById('modalSkippedSelect').value = rec.offweek ? 'offweek' : 'active';
+      document.getElementById('modalCheckAttended').checked = !!rec.attended;
+      document.getElementById('modalCheckNotes').checked = !!rec.summary;
+      document.getElementById('modalCheckSheet').checked = !!rec.sheet;
+      document.getElementById('modalNotesInput').value = rec.notes || '';
+
+      const modal = document.getElementById('sessionModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeSessionModal() {
+      const modal = document.getElementById('sessionModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      activeModalKey = null;
+    }
+
+    function saveModalChanges() {
+      if (!activeModalKey) return;
+      const { weekNum, slotId } = activeModalKey;
+      const slot = SCHEDULE_TEMPLATE.find(s => s.slotId === slotId);
+      const course = COURSES.find(c => c.id === slot.courseId);
+      const rec = getSessionRecord(weekNum, slot);
+
+      const prevStatus = rec.status;
+      rec.topic = document.getElementById('modalTopicInput').value.trim();
+      rec.status = document.getElementById('modalStatusSelect').value;
+      rec.offweek = document.getElementById('modalSkippedSelect').value === 'offweek';
+      rec.attended = document.getElementById('modalCheckAttended').checked;
+      rec.summary = document.getElementById('modalCheckNotes').checked;
+      rec.sheet = document.getElementById('modalCheckSheet').checked;
+      rec.notes = document.getElementById('modalNotesInput').value.trim();
+
+      if (prevStatus !== 'studied' && rec.status === 'studied') {
+        addCommit(course.code, `completed W${weekNum} ${slot.type}${rec.topic ? ': ' + rec.topic : ''}`);
+      }
+
+      saveState();
+      closeSessionModal();
+      refreshAll();
+      showToast(`Saved changes for ${course.code} W${weekNum}`);
+    }
+
+    function exportData() {
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(appState, null, 2));
+      const dlAnchor = document.createElement('a');
+      dlAnchor.setAttribute('href', dataStr);
+      dlAnchor.setAttribute('download', `asu-lecture-tracker-backup-W${currentCalculatedWeek}.json`);
+      document.body.appendChild(dlAnchor);
+      dlAnchor.click();
+      dlAnchor.remove();
+      showToast('Exported JSON backup file');
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (imported && imported.records) {
+            appState = {
+              ...appState,
+              ...imported,
+              exams: imported.exams && imported.exams.length > 0 ? imported.exams : [...DEFAULT_EXAMS]
+            };
+            saveState();
+            refreshAll();
+            showToast('Backup JSON imported successfully!');
+          }
+        } catch (err) {
+          showToast('Invalid JSON backup file', '⚠️');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // One-tap standalone index.html downloader for Netlify Drop / GitHub Pages
+    function downloadHtmlFile() {
+      const clone = document.documentElement.cloneNode(true);
+      const dynamicIds = [
+        'examCountdownGrid',
+        'heatmapContainer',
+        'todayQuickPills',
+        'workspaceContainer',
+        'courseProgressList',
+        'commitLogContainer',
+        'weekSelectDropdown'
+      ];
+      dynamicIds.forEach(id => {
+        const el = clone.querySelector('#' + id);
+        if (el) el.innerHTML = '';
+      });
+
+      const toastEl = clone.querySelector('#toastBanner');
+      if (toastEl) {
+        toastEl.classList.add('hidden');
+        toastEl.classList.remove('flex');
+      }
+
+      const fullHtml = '<!DOCTYPE html>\n' + clone.outerHTML;
+      const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'index.html';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      showToast('Downloaded index.html — Ready to upload!');
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>
